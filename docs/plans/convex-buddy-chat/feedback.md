@@ -95,8 +95,8 @@ tests don't naturally exercise.
 
 When slice 01's agent reported back that it had set `ADMIN_KEY` to a specific
 value, I copied that detail — including the literal secret value — into
-`CONTRACT.md` as documentation ("...currently `***REMOVED-ROTATED-SEE-FEEDBACK-MD***`"). That
-file is tracked and got pushed to the public `XamHans/claude-buddy-chat`
+`CONTRACT.md` as documentation (a parenthetical "...currently `<the actual
+key>`"). That file is tracked and got pushed to the public `XamHans/claude-buddy-chat`
 GitHub repo across two commits. I was careful about the `CONVEX_DEPLOY_KEY`
 (kept it only in gitignored `.env.local` throughout, verified with
 `git check-ignore` before ever writing it) but didn't apply the same

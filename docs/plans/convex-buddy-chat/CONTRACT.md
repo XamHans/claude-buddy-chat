@@ -25,10 +25,13 @@ the `memberships` table — **not** Convex's built-in identity/auth system.
 `adminKey` for `mintToken` is a separate, higher-privilege owner secret, never
 handed to friends. Implemented (slice 01) as a comparison against an
 `ADMIN_KEY` Convex deployment environment variable (set with
-`npx convex env set ADMIN_KEY <secret>`; currently `***REMOVED-ROTATED-SEE-FEEDBACK-MD***`) — NOT
-the literal `CONVEX_DEPLOY_KEY`, because the deploy key can't be read from
-inside a Convex function. Slice 05's mint/onboarding step must pass this
-`ADMIN_KEY` value as `adminKey`.
+`npx convex env set ADMIN_KEY <secret>`) — NOT the literal
+`CONVEX_DEPLOY_KEY`, because the deploy key can't be read from inside a
+Convex function. Slice 05's mint/onboarding step must pass this `ADMIN_KEY`
+value as `adminKey`. The actual value lives only in the gitignored
+`.env.local` — never write it into this or any other tracked file (an
+earlier draft of this section did exactly that; the value was rotated after
+the leak was caught, see `feedback.md`).
 
 Timestamps (`time` on messages, `lastSeen` on presence) are **Unix seconds**,
 matching the history-cache example in section 4 (e.g. `1784291334`).

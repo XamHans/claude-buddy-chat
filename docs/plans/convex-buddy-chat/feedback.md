@@ -91,6 +91,41 @@ any slice that installs a shell alias/global command, since it's cheap and
 catches exactly this class of cwd-relative-resolution bug that unit/sandbox
 tests don't naturally exercise.
 
+## 6. The real ADMIN_KEY value got committed to CONTRACT.md — a genuine secret leak
+
+When slice 01's agent reported back that it had set `ADMIN_KEY` to a specific
+value, I copied that detail — including the literal secret value — into
+`CONTRACT.md` as documentation ("...currently `***REMOVED-ROTATED-SEE-FEEDBACK-MD***`"). That
+file is tracked and got pushed to the public `XamHans/claude-buddy-chat`
+GitHub repo across two commits. I was careful about the `CONVEX_DEPLOY_KEY`
+(kept it only in gitignored `.env.local` throughout, verified with
+`git check-ignore` before ever writing it) but didn't apply the same
+discipline to a secret mentioned in prose inside a doc — the `.gitignore`
+protection only covers file *paths*, not values that get typed into an
+otherwise-tracked markdown file.
+
+**Caught by:** the user directly ("du hast secrets committed ans repo").
+Not caught by me, and not caught by any of the agents that touched
+`CONTRACT.md` afterward (slice 05's agent, the merge-wave agent) — nobody
+was looking for this class of problem because the instructions only ever
+said "don't commit `.env.local`," never "don't write a secret's *value*
+into any tracked file, regardless of which file it is."
+
+**Remediation:** rotated `ADMIN_KEY` immediately on the live Convex
+deployment (confirmed the old value now gets rejected with "unauthorized"
+before doing anything else — rotation, not history-scrubbing, is what
+actually neutralizes exposure once something's been pushed to a public
+repo), then removed the literal value from `CONTRACT.md`, replaced with a
+pointer to `.env.local`.
+
+**Lesson:** "never commit `.env.local`" and "never write a real secret
+value into ANY tracked file" are two different rules — a `.gitignore` entry
+only enforces the first one. When documenting what an agent did (env vars
+set, keys generated, credentials configured), the value itself should never
+make it into the write-up, only the variable name and where the real value
+lives. This applies to every future slice/plan doc in this project, not
+just this one instance.
+
 ## What's still good from this run
 
 Slice 01 itself is fully built and verified (schema, auth-by-token, all 5

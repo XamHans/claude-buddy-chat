@@ -1,5 +1,12 @@
 # convex-buddy-chat — orchestration instructions
 
+**Status: build complete.** All five slices shipped, merged into `master`,
+and pushed — see `STATUS.md`. This file (and its embedded script) is now a
+historical record of *how* it was built, kept for reference if the plan is
+ever extended (a slice 06+) or the build needs redoing from scratch. For
+day-to-day usage, see the repo's `README.md`; for what went wrong and got
+fixed along the way, see `feedback.md`.
+
 Single entry point to build this plan end-to-end. Read this whole file first —
 it carries the full context so nothing needs to be re-derived from `plan.md`
 or the individual slice files.

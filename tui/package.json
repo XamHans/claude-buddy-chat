@@ -1,0 +1,23 @@
+{
+  "name": "buddy-chat-tui",
+  "version": "1.0.0",
+  "description": "Terminal UI (Ink) for convex-buddy-chat: presence + chat over Convex",
+  "type": "module",
+  "bin": {
+    "buddy-chat-tui": "./bin/buddy-chat-tui.js"
+  },
+  "scripts": {
+    "start": "tsx src/cli.jsx",
+    "test": "node --import tsx --test --test-force-exit test/*.test.js test/*.test.jsx"
+  },
+  "dependencies": {
+    "convex": "^1.17.0",
+    "ink": "^5.0.0",
+    "react": "^18.3.0"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.19.0"
+  },
+  "license": "MIT"
+}

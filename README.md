@@ -16,7 +16,7 @@ Das Kommando:
 - legt vor jeder Änderung ein `settings.json.bak` als Backup an
 - lässt bestehende Einstellungen unangetastet (merged nur die Hooks rein, überschreibt nichts)
 
-## Benutzung
+## Benutzung in Claude Code
 
 Claude Code einmal neu starten, danach:
 
@@ -25,6 +25,16 @@ Claude Code einmal neu starten, danach:
 ```
 
 zeigt dir außerdem den letzten Chatverlauf und ob dein Buddy gerade online ist. Ohne Text (`/buddy-chat`) nur Status + Verlauf anzeigen.
+
+## Live-Chat im Terminal (ohne Claude)
+
+Für echtes Hin-und-her-Chatten ohne Claude dazwischen — ein normales Terminalfenster, tippen + Enter zum Senden, eingehende Nachrichten poppen sofort auf:
+
+```
+npx -p github:XamHans/claude-buddy-chat buddy-chat-live
+```
+
+Läuft, solange das Fenster offen ist. Strg+C zum Beenden. Name und Topic werden automatisch aus der lokalen `~/.claude/skills/buddy-chat/SKILL.md` gelesen (die der Setup-Befehl oben angelegt hat) — falls die nicht existiert, `buddy-chat-live <name> <topic-slug>` angeben.
 
 ## Hinweis
 

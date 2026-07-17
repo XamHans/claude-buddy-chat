@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "One-command presence + chat bridge between two Claude Code users, over ntfy.sh",
   "bin": {
-    "claude-buddy-chat": "./setup.js"
+    "claude-buddy-chat": "./setup.js",
+    "buddy-chat-live": "./chat.js"
   },
   "license": "MIT"
 }

@@ -1,10 +1,9 @@
 {
   "name": "claude-buddy-chat",
   "version": "1.0.0",
-  "description": "One-command presence + chat bridge between two Claude Code users, over ntfy.sh",
+  "description": "One-command presence + chat bridge between friends, backed by a private Convex Cloud project",
   "bin": {
-    "claude-buddy-chat": "./setup.js",
-    "buddy-chat-live": "./chat.js"
+    "claude-buddy-chat": "./setup.js"
   },
   "license": "MIT",
   "scripts": {

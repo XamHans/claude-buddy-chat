@@ -1,19 +1,28 @@
 #!/usr/bin/env node
 
-// Sets up a "buddy-chat" presence + chat bridge for Claude Code:
-//   - SessionStart/SessionEnd hooks in ~/.claude/settings.json post online/offline
-//     status to a shared ntfy.sh topic.
-//   - A /buddy-chat skill in ~/.claude/skills/buddy-chat/ to send/read messages
-//     and check presence, from inside Claude Code.
+// Friend-side onboarding for "buddy-chat": seeds the local config (CONTRACT.md
+// section 3), wires the SessionStart/SessionEnd presence hooks, installs the
+// TUI (Ink) + its dependencies, installs the Claude Code skill, and adds a
+// `buddy` shell alias — idempotent on rerun, additive to any existing
+// ~/.claude/settings.json content.
 //
 // Usage:
-//   npx github:XamHans/claude-buddy-chat <name> <topic-slug>
+//   npx github:XamHans/claude-buddy-chat <name> <token>
 // or run with no args and answer the two prompts.
+//
+// <token> is minted by the room's owner (scripts/buddy-invite.js) and handed
+// to you out-of-band. The room itself is discovered automatically from the
+// token via Convex's presence:listPresence — you don't need to know it.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
+const { spawnSync } = require('child_process');
+
+// Fixed Convex deployment for this friend group (CONTRACT.md section 3) —
+// every friend's client talks to the same project.
+const CONVEX_URL = 'https://capable-platypus-33.eu-west-1.convex.cloud';
 
 function prompt(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -23,37 +32,63 @@ function prompt(question) {
   }));
 }
 
-function skillMarkdown(name, topic) {
-  return `---
-name: buddy-chat
-description: Send a chat message to your Claude-Code buddy or check recent messages and whether they're currently online. Bridges two separate Claude Code sessions over a shared ntfy.sh topic. Only invoke manually with /buddy-chat.
-disable-model-invocation: true
-allowed-tools: Bash(curl *) Write(*)
----
-
-# Buddy chat over ntfy.sh
-
-Presence + chat bridge between two Claude Code users, using ntfy.sh (free, no-signup pub-sub relay) as the transport. Nothing to install — plain HTTP.
-
-- Presence topic (posted automatically by the SessionStart/SessionEnd hooks in settings.json): \`${topic}-presence\`
-- Chat topic: \`${topic}-chat\`
-- Your display name: ${name}
-
-These topic names are a shared secret (random slug) — anyone who guesses them could read or post. Fine for casual chat with a friend, not for anything sensitive.
-
-## What to do
-
-The user's message, if any, is: $ARGUMENTS
-
-1. If $ARGUMENTS is non-empty, send it:
-   - First write the exact raw text of $ARGUMENTS to a scratch file with the Write tool (e.g. under the scratchpad directory). Never splice the raw message text directly into a shell command string — it may contain quotes/backticks/\`$(...)\` that would break or, worse, execute as shell. Always go through a file and let curl read it.
-   - Then run: \`curl -s -X POST -H "Title: ${name}" --data-binary @<scratchfile> https://ntfy.sh/${topic}-chat\`
-2. Always check recent activity:
-   - \`curl -s "https://ntfy.sh/${topic}-chat/json?poll=1&since=2h"\` — one JSON object per line: \`time\` (unix seconds), \`title\` (sender), \`message\` (text).
-   - \`curl -s "https://ntfy.sh/${topic}-presence/json?poll=1&since=6h"\` — same shape; the latest entry tells you whether the buddy currently looks online or offline.
-3. Report back as a short, human-readable chat transcript (oldest to newest, sender + local time + text) plus one line on current presence. Don't dump raw JSON at the user.
-`;
+async function resolveRoom(token) {
+  const res = await fetch(`${CONVEX_URL}/api/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: 'presence:listPresence', args: { token }, format: 'json' }),
+  });
+  const body = await res.json();
+  if (body.status !== 'success') {
+    throw new Error(body.errorMessage || 'token was rejected by Convex');
+  }
+  const memberships = body.value.memberships;
+  if (!memberships || memberships.length === 0) {
+    throw new Error('token is valid but has no membership — ask whoever minted it');
+  }
+  return memberships[0].room;
 }
+
+// --- local config (CONTRACT.md section 3) ---------------------------------
+
+function writeConfig(claudeDir, { name, token, room }) {
+  const configPath = path.join(claudeDir, 'buddy-chat', 'config.json');
+  let config = { convexUrl: CONVEX_URL, personName: name, memberships: [] };
+  if (fs.existsSync(configPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch {
+      // Corrupt/unreadable existing file: start fresh rather than fail onboarding.
+    }
+  }
+  config.convexUrl = CONVEX_URL;
+  config.personName = name;
+  if (!Array.isArray(config.memberships)) config.memberships = [];
+  if (!config.memberships.some((m) => m.token === token)) {
+    config.memberships.push({ room, token });
+  }
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+// --- presence/status-line scripts (slice 02, repo-tracked at scripts/) ----
+
+function installScripts(claudeDir) {
+  const destDir = path.join(claudeDir, 'buddy-chat');
+  fs.mkdirSync(destDir, { recursive: true });
+  const files = [
+    ['buddy-presence.sh', 'presence.sh'],
+    ['buddy-statusline.sh', 'statusline.sh'],
+  ];
+  for (const [src, dest] of files) {
+    const destPath = path.join(destDir, dest);
+    fs.copyFileSync(path.join(__dirname, 'scripts', src), destPath);
+    fs.chmodSync(destPath, 0o755);
+  }
+  return path.join(destDir, 'presence.sh');
+}
+
+// --- SessionStart/SessionEnd hooks, additive merge into settings.json -----
 
 function hookEntry(command) {
   return { matcher: '', hooks: [{ type: 'command', command }] };
@@ -65,23 +100,8 @@ function addHookOnce(list, entry) {
   if (!exists) list.push(entry);
 }
 
-async function main() {
-  let [name, topic] = process.argv.slice(2);
-  if (!name) name = await prompt('Dein Anzeigename (z.B. Alex): ');
-  if (!topic) topic = await prompt('Gemeinsamer Topic-Slug (von deinem Kumpel bekommen, z.B. jh-cc-28eeb54621): ');
-
-  if (!name || !topic) {
-    console.error('Name und Topic-Slug werden beide gebraucht. Abbruch.');
-    process.exit(1);
-  }
-
-  const claudeDir = path.join(os.homedir(), '.claude');
-  const skillDir = path.join(claudeDir, 'skills', 'buddy-chat');
+function wireSettings(claudeDir, presenceScriptPath) {
   const settingsPath = path.join(claudeDir, 'settings.json');
-
-  fs.mkdirSync(skillDir, { recursive: true });
-  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMarkdown(name, topic));
-
   let settings = {};
   if (fs.existsSync(settingsPath)) {
     fs.copyFileSync(settingsPath, `${settingsPath}.bak`);
@@ -92,24 +112,126 @@ async function main() {
   settings.hooks.SessionEnd = settings.hooks.SessionEnd || [];
 
   addHookOnce(settings.hooks.SessionStart, hookEntry(
-    `curl -s -X POST -H 'Title: Claude Code' -H 'Tags: green_circle' -d '🟢 ${name} ist online (Claude Code)' https://ntfy.sh/${topic}-presence >/dev/null 2>&1 &`
+    `sh ${presenceScriptPath} online >/dev/null 2>&1 &`
   ));
   addHookOnce(settings.hooks.SessionEnd, hookEntry(
-    `curl -s -X POST -H 'Title: Claude Code' -H 'Tags: red_circle' -d '🔴 ${name} ist offline' https://ntfy.sh/${topic}-presence >/dev/null 2>&1 &`
+    `sh ${presenceScriptPath} offline >/dev/null 2>&1 &`
   ));
 
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+// --- TUI install (slice 03, repo-tracked at tui/) --------------------------
+
+function copyDirSync(src, dest, skipNames) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (skipNames.includes(entry.name)) continue;
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(s, d, skipNames);
+    } else if (entry.isFile()) {
+      fs.copyFileSync(s, d);
+    }
+  }
+}
+
+function installTui(claudeDir) {
+  const tuiDest = path.join(claudeDir, 'buddy-chat', 'tui');
+  copyDirSync(path.join(__dirname, 'tui'), tuiDest, ['node_modules']);
+
+  const alreadyInstalled = fs.existsSync(path.join(tuiDest, 'node_modules', 'ink'))
+    && fs.existsSync(path.join(tuiDest, 'node_modules', 'react'));
+  if (alreadyInstalled) {
+    console.log('tui/ dependencies already installed, skipping npm install.');
+  } else {
+    console.log('Installing tui/ dependencies (npm install — this can take a moment)...');
+    const result = spawnSync('npm', ['install'], { cwd: tuiDest, stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error('npm install failed inside the installed tui/ directory');
+    }
+  }
+  return path.join(tuiDest, 'bin', 'buddy-chat-tui.js');
+}
+
+// --- Claude Code skill (slice 04, repo-tracked at skill-template/) --------
+
+function installSkill(claudeDir) {
+  const skillDir = path.join(claudeDir, 'skills', 'buddy-chat');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.copyFileSync(
+    path.join(__dirname, 'skill-template', 'SKILL.md'),
+    path.join(skillDir, 'SKILL.md')
+  );
+}
+
+// --- `buddy` shell alias, additive to ~/.zshrc / ~/.bashrc -----------------
+
+const ALIAS_MARKER = '# buddy-chat alias (added by claude-buddy-chat onboarding)';
+
+function aliasLine(tuiEntryPath) {
+  return `alias buddy="node --import tsx '${tuiEntryPath}'"`;
+}
+
+function addAliasOnce(rcPath, line) {
+  let content = fs.existsSync(rcPath) ? fs.readFileSync(rcPath, 'utf8') : '';
+  if (content.includes(line)) return;
+  const sep = content.length && !content.endsWith('\n') ? '\n' : '';
+  fs.writeFileSync(rcPath, `${content}${sep}${ALIAS_MARKER}\n${line}\n`);
+}
+
+function wireAlias(home, tuiEntryPath) {
+  const line = aliasLine(tuiEntryPath);
+  const candidates = ['.zshrc', '.bashrc'].map((f) => path.join(home, f));
+  const existing = candidates.filter((p) => fs.existsSync(p));
+  const targets = existing.length ? existing : [path.join(home, '.zshrc')];
+  for (const rc of targets) addAliasOnce(rc, line);
+  return targets;
+}
+
+// --- main -------------------------------------------------------------------
+
+async function main() {
+  let [name, token] = process.argv.slice(2);
+  if (!name) name = await prompt('Dein Anzeigename (z.B. Alex): ');
+  if (!token) token = await prompt('Dein Token (von deinem Kumpel bekommen): ');
+
+  if (!name || !token) {
+    console.error('Name und Token werden beide gebraucht. Abbruch.');
+    process.exit(1);
+  }
+
+  console.log('Prüfe Token gegen Convex...');
+  let room;
+  try {
+    room = await resolveRoom(token);
+  } catch (err) {
+    console.error(`Setup abgebrochen: ${err.message}`);
+    process.exit(1);
+  }
+
+  const home = os.homedir();
+  const claudeDir = path.join(home, '.claude');
+
+  writeConfig(claudeDir, { name, token, room });
+  const presenceScriptPath = installScripts(claudeDir);
+  wireSettings(claudeDir, presenceScriptPath);
+  const tuiEntryPath = installTui(claudeDir);
+  installSkill(claudeDir);
+  const rcFiles = wireAlias(home, tuiEntryPath);
 
   console.log('');
-  console.log(`✅ Eingerichtet für ${name}.`);
-  console.log(`   Presence-Topic: ${topic}-presence`);
-  console.log(`   Chat-Topic:     ${topic}-chat`);
+  console.log(`✅ Eingerichtet für ${name} im Raum "${room}".`);
+  console.log(`   Config:        ${path.join(claudeDir, 'buddy-chat', 'config.json')}`);
+  console.log(`   TUI:           ${tuiEntryPath}`);
+  console.log(`   Skill:         ${path.join(claudeDir, 'skills', 'buddy-chat', 'SKILL.md')}`);
+  console.log(`   Alias 'buddy': ${rcFiles.join(', ')} (neues Terminal öffnen oder Shell neu laden)`);
   console.log('');
-  console.log('Ab jetzt: Claude Code neu starten, dann in Claude Code eintippen:');
+  console.log('Ab jetzt: Claude Code neu starten (Presence-Hook aktiv), und `buddy` in einem');
+  console.log('neuen Terminal tippen für die Chat-Oberfläche. In Claude Code außerdem:');
   console.log('   /buddy-chat Hey, bin online!');
   console.log('');
-  console.log('Optional: die ntfy-App (ntfy.sh/app) installieren und beide Topics abonnieren,');
-  console.log('für echte Push-Benachrichtigungen aufs Handy.');
 }
 
 main();

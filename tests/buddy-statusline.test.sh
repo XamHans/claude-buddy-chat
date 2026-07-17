@@ -1,6 +1,6 @@
 #!/bin/sh
 # Feeds mock stdin JSON to scripts/buddy-statusline.sh (same trick used for
-# the ntfy-era status line) and checks the printed "🟢 X/Y Freunde online"
+# the original status line) and checks the printed "🟢 X/Y Freunde online"
 # line against real Convex data. Also checks the background refresh isn't
 # killed before it completes (the "kill-before-disown" bug class).
 set -eu

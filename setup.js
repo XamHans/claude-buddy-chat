@@ -171,7 +171,14 @@ function installSkill(claudeDir) {
 const ALIAS_MARKER = '# buddy-chat alias (added by claude-buddy-chat onboarding)';
 
 function aliasLine(tuiEntryPath) {
-  return `alias buddy="node --import tsx '${tuiEntryPath}'"`;
+  // `node --import tsx` resolves "tsx" relative to the shell's cwd at
+  // invocation time, not relative to tuiEntryPath — so it fails whenever
+  // `buddy` is typed from any directory other than tui/ itself (i.e.
+  // always, in real use). Call tui/'s own locally-installed tsx binary
+  // directly instead; that resolves correctly regardless of cwd.
+  const tuiDir = path.dirname(path.dirname(tuiEntryPath));
+  const tsxBin = path.join(tuiDir, 'node_modules', '.bin', 'tsx');
+  return `alias buddy="'${tsxBin}' '${tuiEntryPath}'"`;
 }
 
 function addAliasOnce(rcPath, line) {

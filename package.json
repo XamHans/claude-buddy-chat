@@ -1,0 +1,9 @@
+{
+  "name": "claude-buddy-chat",
+  "version": "1.0.0",
+  "description": "One-command presence + chat bridge between two Claude Code users, over ntfy.sh",
+  "bin": {
+    "claude-buddy-chat": "./setup.js"
+  },
+  "license": "MIT"
+}

@@ -112,3 +112,27 @@ is a read-instantly-on-startup cache, never the other way around.
   `SKILL.md` content — none of the formats above replace anything from the
   ntfy era; that trust model (topic slug) is fully gone, replaced by
   `memberships[].token`.
+
+## 6. File locations, pinned after 02/03 built (gaps this file originally left open)
+
+- **Presence/status-line scripts (slice 02):** repo-tracked at
+  `scripts/buddy-presence.sh` and `scripts/buddy-statusline.sh`; installed by
+  onboarding (slice 05) to `~/.claude/buddy-chat/presence.sh` and
+  `~/.claude/buddy-chat/statusline.sh`. Already verified working at those
+  install paths on the reference machine — don't rename.
+- **TUI source (slice 03):** self-contained `tui/` subdirectory at the repo
+  root, its own `package.json`/`node_modules` (Ink + React + the Convex
+  client), entry point `tui/bin/buddy-chat-tui.js`. Onboarding (slice 05)
+  installs this directory (or runs `npm install` inside it) under
+  `~/.claude/buddy-chat/tui/`, and the `buddy` shell alias points at its
+  entry point.
+- **Claude Code skill (slice 04) — real gap, slice 05 must close it:** slice
+  04's actual deliverable is verified and working, but only as a *global*
+  file at `~/.claude/skills/buddy-chat/SKILL.md` on the machine it was built
+  on — nothing about it is tracked in this repo (matching how the prior
+  ntfy-era skill also lived outside the repo). That means, as written, a new
+  friend's onboarding has no source to install *from*. Slice 05 must pull the
+  already-verified content from `~/.claude/skills/buddy-chat/SKILL.md` into a
+  repo-tracked template (e.g. `skill-template/SKILL.md`) and have onboarding
+  write it out to each new machine's `~/.claude/skills/buddy-chat/SKILL.md` —
+  don't rewrite the skill from scratch, the existing content is tested.

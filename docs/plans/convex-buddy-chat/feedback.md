@@ -71,9 +71,30 @@ outcome in a JSON envelope (`{"status": "success", "value": ...}` or
 - All timestamps (`messages.time`, `presence.lastSeen`) are Unix **seconds**,
   matching the cache example already in `CONTRACT.md` §4.
 
+## 5. Verification-coverage gap the automated tests didn't catch
+
+The onboarding installer (slice 05) had 16/16 + sandbox-installer tests
+passing, all genuinely checking real behavior — but none of them actually
+*executed* the generated `buddy` alias command from a directory other than
+`tui/`. The alias was `node --import tsx '<path>'`, and `--import` resolves
+its specifier against the shell's cwd at invocation time, not the target
+script's directory — so it only worked when `buddy` happened to be typed
+from inside `tui/`, i.e. essentially never in real use. Only caught by
+manually smoke-testing the freshly-installed alias by hand from an unrelated
+directory (`/tmp`) after onboarding. Fixed: call `tui/node_modules/.bin/tsx`
+directly instead of `node --import tsx`.
+
+**Lesson:** a slice's own test suite can be thorough and still miss "does the
+one command the user actually types work, from an arbitrary starting
+directory" — that specific check is worth doing by hand at least once after
+any slice that installs a shell alias/global command, since it's cheap and
+catches exactly this class of cwd-relative-resolution bug that unit/sandbox
+tests don't naturally exercise.
+
 ## What's still good from this run
 
 Slice 01 itself is fully built and verified (schema, auth-by-token, all 5
 functions, 10 passing tests, verified live including the curl-based path) —
-nothing here needs to be redone. Only the parallel-wave mechanics need
-fixing before retrying 02/03/04.
+nothing here needs to be redone. Only the parallel-wave mechanics needed
+fixing before retrying 02/03/04, and the alias cwd-resolution bug (item 5)
+needed a manual fix after slice 05.

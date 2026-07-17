@@ -1,0 +1,7 @@
+{
+  "convexUrl": "https://capable-platypus-33.eu-west-1.convex.cloud",
+  "personName": "test-alice",
+  "memberships": [
+    { "room": "test-room", "token": "tok_712c6210f6d64f1a88609c6458cd6adc" }
+  ]
+}
